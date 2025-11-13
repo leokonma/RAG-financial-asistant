@@ -1,58 +1,61 @@
 # ================================================================
-# create_finance_db.py — Conversión de transacciones a embeddings
+# create_finance_db.py — Build vector DB using processed finance data
 # ================================================================
 
 import os
-import torch
-from time import sleep
+import pandas as pd
+from dotenv import load_dotenv
 
-# 🚫 Desactivar telemetría y avisos de Chroma
-os.environ["ANONYMIZED_TELEMETRY"] = "false"
-os.environ["CHROMA_TELEMETRY_ENABLED"] = "false"
+load_dotenv()
 
-# === Librerías de LangChain ===
-from langchain_community.document_loaders import CSVLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-
-# ✅ Compatibilidad entre versiones (sin cambiar requirements)
-try:
-    from langchain_huggingface import HuggingFaceEmbeddings
-except ImportError:
-    from langchain_community.embeddings import HuggingFaceEmbeddings
-
+from langchain_openai import OpenAIEmbeddings
 from langchain_chroma import Chroma
+from langchain.docstore.document import Document
 
-# === Parámetros ===
-CSV_PATH = "data/Personal_Finance_Dataset.csv"
+PROCESSED_PATH = "data/Personal_Finance_Dataset_Processed.csv"
 CHROMA_DIR = "data/chroma_finance_db"
 
-# === Paso 1: Cargar datos ===
-print("✅ Loading transactions from CSV...")
-loader = CSVLoader(file_path=CSV_PATH, encoding="utf-8")
-docs = loader.load()
-print(f"✅ Loaded {len(docs)} transactions.")
+# --- 1) Load processed dataset ---
+print("📄 Loading processed dataset...")
+df = pd.read_csv(PROCESSED_PATH)
 
-# === Paso 2: Dividir texto ===
-splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-texts = splitter.split_documents(docs)
-print(f"✅ Generated {len(texts)} text chunks.")
+if "RAG_Text" not in df.columns:
+    raise ValueError("❌ ERROR: 'RAG_Text' column not found. Run prepare_finance_data.py first!")
 
-# === Paso 3: Cargar modelo de embeddings ===
-print("⚙️ Loading model... this may take a few minutes ⏳")
-torch.set_num_threads(4)  # evita bloqueos al inicializar PyTorch
+print(f"Loaded {len(df)} cleaned transactions.")
 
-embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+# --- 2) Convert rows into LangChain Document objects ---
+print("🧩 Creating text chunks for embedding...")
 
-print("✅ Embedding model loaded successfully.")
+documents = []
+for _, row in df.iterrows():
+    text = row["RAG_Text"]
+    metadata = {
+        "Date": row["Date"],
+        "Category": row["Category"],
+        "Type": row["Type"],
+        "Amount": row["Amount"],
+        "Year": row["Year"],
+        "Month": row["Month"],
+        "Quarter": row["Quarter"],
+    }
+    documents.append(Document(page_content=text, metadata=metadata))
 
-# === Paso 4: Crear base vectorial ===
-print("💾 Creating Chroma vector database...")
-vector_store = Chroma.from_documents(
-    documents=texts,
+print(f"Generated {len(documents)} documents for embedding.")
+
+# --- 3) Load OpenAI Embeddings ---
+print("🔵 Loading OpenAI embeddings...")
+embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+
+# --- 4) Create Chroma Vector DB ---
+print("💾 Creating Chroma vector DB...")
+os.makedirs(CHROMA_DIR, exist_ok=True)
+
+db = Chroma.from_documents(
+    documents=documents,
     embedding=embeddings,
     persist_directory=CHROMA_DIR
 )
 
-print(f"✅ Stored {len(texts)} chunks in {CHROMA_DIR}")
-print("🚀 Finance DB successfully created and persisted.")
-print("🎯 You can now run `python query_finance_rag.py` to query your finance data.")
+print("🚀 Vector DB created successfully!")
+print(f"📁 Stored in: {CHROMA_DIR}")
