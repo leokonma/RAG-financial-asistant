@@ -56,7 +56,9 @@ cd RAG-financial-asistant
 
 ```bash
 python -m venv .venv
-.\.venv\Scripts\activate     # Windows
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+.\.venv\Scripts\activate
+
 ```
 
 ### **Install dependencies**
