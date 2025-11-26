@@ -1,145 +1,133 @@
 import pandas as pd
 import re
-from datetime import datetime
-
-# =====================================================
-# UTILITIES
-# =====================================================
-
-def clean_amount(x):
-    """Convert '1.234,56' or '−3,20' or '-3.20' → float."""
-    if pd.isna(x):
-        return None
-    x = str(x).strip()
-    x = x.replace("−", "-")
-    x = x.replace(",", ".")
-    try:
-        return float(x)
-    except:
-        return None
-
-
-def clean_date(x):
-    """Clean date in various formats."""
-    if pd.isna(x):
-        return None
-    try:
-        return pd.to_datetime(x, errors="coerce")
-    except:
-        return None
-
-
-def _drop_unnamed(df):
-    return df.loc[:, ~df.columns.str.contains("^Unnamed")]
 
 # =====================================================
 # BG LOADER  (Banco General Panamá)
 # =====================================================
 
 def load_BG(path):
-    print("📘 Loading BG...")
+    print("📘 Loading BG (clean version)...")
 
-    df_raw = pd.read_excel(path, header=None)
+    # 1. Load real table starting at row 8
+    df = pd.read_excel(path, skiprows=7, header=0)
 
-    # Find header row dynamically
-    header_row = df_raw[
-        df_raw.apply(lambda r: r.astype(str).str.contains("Fecha|Descripción|Saldo", case=False).any(), axis=1)
-    ].index[0]
+    # 2. Drop irrelevant columns (confirmed from notebook)
+    df = df.drop(columns=[
+        "Unnamed: 1",
+        "Referencia",
+        "Transacción",
+        "Unnamed: 7",
+        "Saldo total"
+    ], errors="ignore")
 
-    df = pd.read_excel(path, header=header_row)
-    df = _drop_unnamed(df)
-    df.columns = [str(c).strip() for c in df.columns]
+    # Remaining columns now:
+    # Fecha | Descripción | Débito | Crédito
 
-    # Find amount column (BG does not label debit/credit correctly)
-    amount_col = None
-    for col in df.columns:
-        if any(k in col.lower() for k in ["débito", "debito", "crédito", "credito", "importe", "monto"]):
-            amount_col = col
-            break
+    # 3. Collapse debit + credit into single amount
+    def collapse_amount(row):
+        if pd.notna(row.get("Débito")):
+            return row["Débito"]
+        if pd.notna(row.get("Crédito")):
+            return row["Crédito"]
+        return None
 
-    if amount_col is None:
-        raise ValueError("❌ No 'Débito/Crédito/Importe/Monto' column found in BG file.")
+    df["amount"] = df.apply(collapse_amount, axis=1)
+    df["amount"] = pd.to_numeric(df["amount"], errors="coerce")
 
-    df["amount_raw"] = df[amount_col].apply(clean_amount)
+    # 4. Convert Fecha
+    df["Fecha"] = pd.to_datetime(df["Fecha"], errors="coerce")
 
-    # Detect sign from description text
-    def detect_sign(row):
-        desc = str(row.get("description", "")).lower()
+    # 5. Clean description
+    df["Descripción"] = df["Descripción"].astype(str).str.strip()
 
-        income_kw = ["yappy de", "transferencia de", "depósito", "deposito", "interes", "abono"]
-        expense_kw = ["compra", "pago", "cargo", "itbms", "super", "estanco", "beer",
-                      "google", "spotify", "farmacia", "vinted", "kebab", "uber"]
-
-        if any(k in desc for k in income_kw):
-            return row["amount_raw"]
-
-        if any(k in desc for k in expense_kw):
-            return -row["amount_raw"]
-
-        # default: assume expense
-        return -row["amount_raw"]
-
-    df["amount"] = df.apply(detect_sign, axis=1)
-
-    # Clean date
-    if "date" in df.columns:
-        df["date"] = df["date"].apply(clean_date)
-    else:
-        # find the column automatically
-        for col in df.columns:
-            if "fecha" in col.lower():
-                df["date"] = df[col].apply(clean_date)
-                break
-
-    df["currency"] = "EUR"
+    # 6. Add metadata
+    df["currency"] = "USD"   # Later converted to EUR in convert_usd_to_eur
     df["source"] = "BG"
 
-    keep = ["date", "description", "amount", "currency", "source"]
-    df = df[[c for c in keep if c in df.columns]]
-    df = df.dropna(subset=["date"])
+    # 7. Rename AFTER cleaning
+    df = df.rename(columns={
+        "Fecha": "date",
+        "Descripción": "description"
+    })
+
+    # 8. Final column order
+    df = df[["date", "description", "amount", "currency", "source"]]
+
+    # 9. Remove invalid rows
+    df = df.dropna(subset=["date", "amount"])
+
+    # 10. Sort chronologically
+    df = df.sort_values("date").reset_index(drop=True)
 
     return df
+
 
 # =====================================================
 # SD LOADER  (Santander España)
 # =====================================================
 
 def load_SD(path):
-    print("📕 Loading SD...")
+    print("📕 Loading SD (clean version)...")
 
-    raw = pd.read_excel(path, header=None)
-    header_row = 6
+    # 1. Load real table starting at row 7
+    df = pd.read_excel(path, skiprows=6, header=0)
 
-    df = pd.read_excel(path, header=header_row)
-    df = _drop_unnamed(df)
-    df.columns = [str(c).strip() for c in df.columns]
+    # Raw columns:
+    # Fecha operación | Fecha valor | Concepto | Importe | Saldo | Divisa
 
-    rename_map = {
-        "Fecha operación": "date",
-        "Fecha operacion": "date",
-        "Fecha valor": "date_value",
-        "Concepto": "description",
-        "Importe": "import",
-        "Saldo": "balance",
-        "Divisa": "currency",
-    }
+    # ---- CONVERT FIRST ----
 
-    df = df.rename(columns={c: rename_map.get(c, c) for c in df.columns})
+    # 2. Convert amount
+    def clean_amount_raw(x):
+        if pd.isna(x):
+            return None
+        x = str(x)
+        x = x.replace("EUR", "").replace("€", "")
+        x = x.replace("−", "-")
+        x = x.replace(",", ".")
+        x = x.strip()
+        match = re.findall(r"-?\d+\.?\d*", x)
+        return float(match[0]) if match else None
 
-    if "import" not in df.columns:
-        raise ValueError("❌ Santander file missing 'Importe' field.")
+    df["Importe"] = df["Importe"].apply(clean_amount_raw)
+    df["Importe"] = pd.to_numeric(df["Importe"], errors="coerce")
 
-    df["amount"] = df["import"].apply(clean_amount)
-    df["date"] = df["date"].apply(clean_date)
+    # 3. Convert date
+    df["Fecha operación"] = pd.to_datetime(df["Fecha operación"], dayfirst=True, errors="coerce")
 
-    df["currency"] = "EUR"
+    # 4. Clean description
+    df["Concepto"] = df["Concepto"].astype(str).str.strip()
+
+    # 5. Clean currency
+    df["Divisa"] = df["Divisa"].astype(str).str.strip()
+
+    # 6. Add metadata
     df["source"] = "SD"
 
-    keep = ["date", "description", "amount", "currency", "source", "balance"]
-    df = df[[c for c in keep if c in df.columns]]
-    df = df.dropna(subset=["date"])
+    # 7. Drop useless columns BEFORE renaming
+    df = df.drop(columns=["Fecha valor", "Saldo"], errors="ignore")
+
+    # ---- RENAME LATER ----
+
+    df = df.rename(columns={
+        "Fecha operación": "date",
+        "Concepto": "description",
+        "Importe": "amount",
+        "Divisa": "currency"
+    })
+
+    # ---- FINAL ORDER ----
+
+    df = df[["date", "description", "amount", "currency", "source"]]
+
+    # Filter invalid rows
+    df = df.dropna(subset=["date", "amount"])
+
+    # Sort
+    df = df.sort_values("date").reset_index(drop=True)
 
     return df
+
 
 # =====================================================
 # COMBINED LOADER
