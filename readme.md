@@ -130,6 +130,7 @@ Launch the assistant:
 
 ```bash
 python query_finance_rag.py
+streamlit run dashboard.py
 ```
 
 You will see:
