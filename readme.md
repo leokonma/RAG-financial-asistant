@@ -1,206 +1,299 @@
 
 
-# **Personal Finance RAG Assistant**
+# 💸 **Personal Finance RAG Assistant — AI-Powered Financial Intelligence**
 
-### *AI-powered financial insights using OpenAI Embeddings + GPT-3.5 + ChromaDB*
+### *Your personal financial co-pilot, combining data cleaning, analytics, and Retrieval-Augmented Generation.*
 
-This project implements a **Retrieval-Augmented Generation (RAG)** system that turns your personal financial transactions into an **intelligent finance assistant** capable of answering natural language questions such as:
+This project transforms your **raw bank transactions** into a **clean, enriched, searchable financial intelligence system** powered by:
 
-* *“How much did I spend in November?”*
-* *“What was my total income in 2023?”*
-* *“What are my top spending categories this year?”*
-* *“Give me a summary of expenses by month.”*
-* *“What’s my cumulative cashflow over time?”*
+* **OpenAI GPT models**
+* **Chroma vector store**
+* **LangChain 0.3.x**
+* **Streamlit dashboard (Notion-style redesign)**
+* **Multi-bank ingestion (BG + Santander)**
+* **Automatic currency conversion, categorization & enrichment**
 
-It uses:
+You can ask natural-language questions such as:
 
-✔️ **OpenAI Embeddings** (`text-embedding-3-small`)
-✔️ **GPT-3.5-Turbo** for reasoning
-✔️ **ChromaDB** for vector storage
-✔️ **LangChain 0.3.x** (modern API)
-✔️ A clean and modular 3-script pipeline
+> *“How much did I spend in restaurants last month?”*
+> *“Show me my cumulative balance over time.”*
+> *“What are my top spending categories?”*
+> *“Summarize my year’s expenses.”*
+> *“Where did I spend the most in Madrid?”*
 
 ---
 
-# 📂 **Project Structure**
+# 🧠 **Core Features**
+
+### ✔ Multi-bank support (Banco General + Santander)
+
+### ✔ FX conversion (USD → EUR)
+
+### ✔ Automatic categorization
+
+### ✔ RAG-optimized transaction text for embeddings
+
+### ✔ Chroma vector DB with OpenAI embeddings
+
+### ✔ Notion-style financial dashboard
+
+### ✔ Integrated AI assistant (ChatGPT)
+
+### ✔ Advanced filters (category, source, amount, keyword)
+
+### ✔ Heatmaps, donut charts, monthly breakdowns
+
+### ✔ Full pipeline automation (`runner.py`)
+
+---
+
+# 📁 **Project Structure**
 
 ```
-RAG-financial-asistant/
+RAG-financial-assistant/
 │
-├── prepare_finance_data.py          # Cleans + enriches CSV, creates RAG_Text
-├── create_finance_db.py             # Builds embeddings + Chroma vector DB
-├── query_finance_rag.py             # RAG assistant using GPT-3.5
+├── data_cleaning/
+│   ├── loader.py              ← Multi-bank ingestion (BG + SD)
+│   ├── normalizer.py          ← Date, amount, type, temporal features
+│   ├── fx_converter.py        ← USD → EUR conversion
+│   ├── categorizer.py         ← Auto-categories (Supermarket, Uber, etc.)
+│   ├── enricher.py            ← Creates RAG_Text for embeddings
+│   └── utils.py
+│
+├── build_chroma_vectorstore.py ← Rebuilds vector DB cleanly
+├── query_finance_rag.py        ← RAG assistant (LLM-powered)
+├── dashboard.py                ← Notion-style Streamlit dashboard
+├── runner.py                   ← Full pipeline automation
 │
 ├── data/
-│   ├── Personal_Finance_Dataset.csv              # (Not tracked in Git)
-│   ├── Personal_Finance_Dataset_Processed.csv    # Processed, auto-generated
-│   └── chroma_finance_db/                        # Vector database
+│   ├── BG_Transaccions.xlsx
+│   ├── SD_Transaccions.xlsx
+│   ├── fx_rates.csv
+│   ├── Finance_Processed.csv
+│   └── chroma_finance_db/
 │
-├── .env                               # Contains OPENAI_API_KEY (ignored)
+├── .env
 ├── .gitignore
 └── README.md
 ```
 
 ---
 
-# **1. Setup & Installation**
+# ⚙️ **1. Setup & Installation**
 
-### **Clone the repo**
-
-```bash
-git clone https://github.com/leokonma/RAG-financial-asistant.git
-cd RAG-financial-asistant
-```
-
-### **Create a virtual environment**
+### Create virtual environment
 
 ```bash
 python -m venv .venv
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 .\.venv\Scripts\activate
-
 ```
 
-### **Install dependencies**
+### Install dependencies
 
 ```bash
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
----
-
-# **2. Environment Variables (`.env`)**
+### Add your API key
 
 Create a `.env` file:
 
 ```
-OPENAI_API_KEY="your-openai-key-here"
+OPENAI_API_KEY="your-key-here"
 ```
 
 ---
 
-# **3. Step 1 — Prepare your financial data**
+# 🔄 **2. Run the Complete Data Pipeline**
 
-This script transforms your raw CSV into an enriched dataset with:
-
-* cleaned datetime
-* Year, Month, Week, Quarter
-* spending vs income (signed amounts)
-* cumulative balance
-* Day of week
-* RAG-optimized text (`RAG_Text`)
-
-### Run:
+This command runs **every step**:
 
 ```bash
-python prepare_finance_data.py
+python runner.py
 ```
 
-This generates:
+It performs:
+
+1. Load BG + SD bank data
+2. Convert USD → EUR
+3. Normalize (date, amounts, type, time features)
+4. Categorize
+5. Enrich with RAG_Text
+6. Export `Finance_Processed.csv`
+
+Output:
 
 ```
-data/Personal_Finance_Dataset_Processed.csv
+data/Finance_Processed.csv
 ```
 
 ---
 
-# **4. Step 2 — Build the vector database (Chroma + OpenAI Embeddings)**
+# 🧱 **3. Build the Vector Database (Chroma + OpenAI Embeddings)**
 
-Once your data is processed, generate embeddings:
+Once the processed dataset is generated:
 
 ```bash
-python create_finance_db.py
+python build_chroma_vectorstore.py
 ```
 
-This creates:
+This generates (or rebuilds):
 
 ```
 data/chroma_finance_db/
 ```
 
-Each row is converted into a high-quality semantic embedding using
-**OpenAI’s `text-embedding-3-small`** (extremely cheap + accurate).
+Each transaction becomes a semantic embedding using:
+
+**OpenAI – text-embedding-3-small**
+(cheap, fast, high-quality)
 
 ---
 
-# **5. Step 3 — Run the Finance RAG Assistant**
+# 🧠 **4. RAG Assistant — Ask AI about your finances**
 
-Launch the assistant:
+Launch the RAG assistant:
 
 ```bash
 python query_finance_rag.py
+```
+
+Example questions:
+
+* “How much did I spend in January?”
+* “What are my biggest expenses this year?”
+* “Summarize my finances this month.”
+* “How many Uber rides did I take?”
+
+The assistant:
+
+1. Retrieves relevant transactions
+2. Feeds them into GPT
+3. Produces context-aware financial insights
+
+---
+
+# 📊 **5. Notion-Style Dashboard (Streamlit)**
+
+Run the dashboard:
+
+```bash
 streamlit run dashboard.py
 ```
 
-You will see:
+### ✨ Features:
+
+#### 🧮 KPIs
+
+* Total expenses
+* Total income
+* Net savings
+
+#### 📅 Monthly income vs expenses
+
+#### 🍩 Donut chart by category
+
+#### 🔥 Heatmap (weekday × month)
+
+#### 🛍 Top vendors
+
+#### 🔍 Advanced filters
+
+* Source (BG/SD)
+* Category
+* Income/expense
+* Amount range slider
+* Keyword search in description
+* Date range
+
+#### 🤖 AI Assistant (right panel)
+
+* Persistent side chat
+* Interacts with your actual vectorstore
+* Summaries, insights, budgeting help
+
+---
+
+# 🔍 **6. Pipeline Explained**
+
+### **A) Loader Phase**
+
+Multi-bank ingestion:
+
+* Drop irrelevant columns
+* Convert amounts
+* Convert dates
+* Clean descriptions
+* Add bank metadata
+* Normalize column schema
+
+### **B) Normalization Phase**
+
+Adds:
+
+* Type: income / expense
+* Signed amounts
+* Year / Month / Day
+* Day of week
+* Cumulative balance
+
+### **C) Categorization Phase**
+
+Regex-based classifier:
+
+* Supermarket
+* Restaurants
+* Uber
+* Tabaco / Estanco
+* Pharmacy
+* Suscriptions
+* Movilidad
+* Otros
+
+### **D) Enrichment Phase**
+
+Builds:
+
+`RAG_Text` → optimized for embeddings
+
+Example:
 
 ```
-Personal Finance RAG (OpenAI GPT-3.5) ready.
-🧠 Ask about your finances:
+On 2025-01-05, a expense of 14.20 EUR at "Primaprix" categorized as "Supermarket".
 ```
 
-Now ask anything:
+### **E) Vectorization**
 
-* “How much did I spend in February 2022?”
-* “What category has the highest expenses?”
-* “Give me a monthly summary.”
-* “How does my cashflow trend look?”
-* “What is my total income for 2023?”
+ChromaDB with persistent embeddings.
 
-The assistant will:
+### **F) RAG Query Engine**
 
-1. Retrieve relevant transactions using embeddings
-2. Feed them to GPT-3.5
-3. Produce precise, contextual answers
+Retrieves k=5 similar rows + GPT reasoning.
 
 ---
 
-# **How the RAG pipeline works**
+# 🛡 **7. Privacy & Security**
 
-### **1. Data Preparation**
-
-`prepare_finance_data.py`
-→ Clean & enrich the raw CSV
-→ Convert each transaction into a structured + natural-language `RAG_Text`
-→ Save processed CSV
-
-### **2. Embedding + Vector Store**
-
-`create_finance_db.py`
-→ Convert each row into a Document
-→ Embed using OpenAI
-→ Store in ChromaDB
-
-### **3. Retrieval-Augmented Generation**
-
-`query_finance_rag.py`
-→ Retrieve top-k similar transactions
-→ Inject them into a ChatPromptTemplate
-→ LLM generates financial reasoning over retrieved data
+* No financial files tracked in Git
+* `.env` excluded
+* Embeddings stored locally
+* No cloud storage
+* Only text snippets are sent to OpenAI during queries
+* All raw data stays on device
 
 ---
 
-# **Why this works extremely well**
+# 🏁 **8. Roadmap**
 
-* You have **rich structured time features**
-* Embeddings store semantic meaning of transactions
-* GPT-3.5 does reasoning **only over retrieved facts**
-* Avoid hallucinations and noise
-* Very cheap to operate (fractions of a cent per query)
+* Predictive budgeting with ML
+* Personal finance anomaly detection
+* Subscription manager
+* Spending alerts
+* Savings recommendation engine
+* Export monthly PDF reports
+* Mobile-friendly dashboard mode
 
 ---
-
-# **Privacy & Security**
-
-* No financial files are uploaded to GitHub
-* No `.env` file is stored
-* All embeddings are local in Chroma
-* All data stays on *your machine* except the text sent to OpenAI for analysis
-
-
-
-# **Author**
-
-**Leonardo Sánchez Castillo**
 
